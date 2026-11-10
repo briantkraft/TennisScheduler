@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tennis Schedule Manager</title>
+<style>
+:root{--green:#22c55e;--blue:#3b82f6;--red:#ef4444;--gray:#e5e7eb;--dark:#111827;--purple:#7c3aed}
+*{box-sizing:border-box}
+body{margin:0;padding:15px;font-family:Arial,sans-serif;background:#f8fafc;color:#111827}
+h1{margin-top:0}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px}
+button{border:0;background:#2563eb;color:white;padding:10px 14px;border-radius:6px;cursor:pointer}
+button:hover{opacity:.9}
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+.card{background:white;padding:10px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.15);min-width:150px}
+.card select{margin-top:7px;padding:7px;min-width:180px}
+.auth-panel{margin-bottom:15px;max-width:560px}.auth-panel input{display:block;width:100%;margin:8px 0;padding:9px;border:1px solid #9ca3af;border-radius:5px}.session-label{display:inline-block;margin:7px 0}
+.play-day-options{display:flex;gap:10px;flex-wrap:wrap;margin-top:7px}
+.play-day-options label{font-weight:normal;white-space:nowrap}
+.schedule-container{overflow:auto;background:white;border:1px solid #ccc}
+table{border-collapse:collapse;min-width:1400px}
+th,td{border:1px solid #ccc;text-align:center;padding:8px}
+thead th{position:sticky;top:0;background:var(--dark);color:white;z-index:4}
+.player-col{position:sticky;left:0;min-width:180px;background:white;text-align:left;z-index:3;font-weight:bold}
+thead .player-col{background:var(--dark)}
+.status{cursor:pointer;width:50px}.available{background:var(--green);color:white}.sub{background:var(--blue);color:white}.out{background:var(--red);color:white}.booked{background:var(--purple);color:white}.blank{background:var(--gray)}
+.footer-row{font-weight:bold}input[type=file]{display:none}.delete-btn{background:#dc2626;padding:3px 8px;font-size:12px;float:right}
+.link-btn{background:#7c3aed;padding:3px 7px;font-size:11px;margin-top:4px}
+.legend{margin:0 0 12px;color:#374151;font-size:14px}
+.player-name{font:inherit;font-weight:bold;color:#1d4ed8;background:transparent;padding:0;text-align:left}.player-name.selected{color:#166534;text-decoration:underline}.selected-row{outline:2px solid #22c55e;outline-offset:-2px}
+</style>
+</head>
+<body>
+<h1>Tennis Schedule Manager</h1>
+<div class="toolbar">
+<button id="openCsvButton" onclick="openCsv()">Open CSV</button>
+<input type="file" id="csvFile" accept=".csv">
+<button onclick="exportCSV()">Save CSV</button>
+<button id="addPlayerButton" onclick="addPlayer()">Add Player</button>
+<button id="rollForwardButton" onclick="rollForwardWeek()">Roll Current Week Forward</button>
+<button onclick="window.print()">Print</button>
+</div>
+<div class="card" style="margin-bottom:12px">Click a player name before editing that row. The Scheduler Owner can click their own name to manage the schedule and mark Booked. Names help avoid mistakes, not verify identity.</div>
+<p class="legend">Click your name in the Player column to select your row, then click a date to change your status. Your selection is remembered on this browser.</p>
+<div class="summary">
+<div class="card"><b>Selected player</b><br><span id="sessionLabel" class="session-label">Choose your name in the table</span></div>
+<div class="card"><b>Scheduler Owner</b><br><span id="ownerLabel">Not assigned</span><br><select id="ownerSelect" aria-label="Choose Scheduler Owner"></select><button id="assignOwnerButton" onclick="setSchedulerOwner()">Assign Owner</button></div>
+<div class="card"><b>Play Days</b><div class="play-day-options" id="playDayOptions"></div></div>
+<div class="card"><b>Sync</b><br><span id="syncState">Connecting to shared schedule…</span></div>
+</div>
+<p class="legend">Status cycle: blank → A (Available) → S (Sub) → / (Out) → blank. The Scheduler Owner can cycle / to B (Booked) and B back to blank.</p>
+<div class="schedule-container" id="scheduleContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const STORAGE_KEY="tennisSchedule";
+const DEFAULT_PLAY_DAYS=[1,3,5];
+const DAY_NAMES=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const STATES=["","A","S","/"];
+const SUPABASE_URL="https://gdxdmlcmtcddomcfzdrz.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_uI8ZPQy8Jn5F6RmHOTyddQ_s5IA7hJr";
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const SYNC_CLIENT_ID=createPlayerID();
+let schedule={dates:[],players:[],playDays:[...DEFAULT_PLAY_DAYS],manager:""};
+let selectedPlayerID=localStorage.getItem("tennisSelectedPlayer")||"";
+let cloudReady=false,cloudSaveTimer=null;
+
+function saveLocal(){localStorage.setItem(STORAGE_KEY,JSON.stringify(schedule));if(cloudReady){clearTimeout(cloudSaveTimer);cloudSaveTimer=setTimeout(saveCloudSchedule,250)}}
+function loadLocal(){
+ const data=localStorage.getItem(STORAGE_KEY);
+ if(!data)return false;
+ try{schedule=JSON.parse(data)}catch{return false}
+ if(!Array.isArray(schedule.dates))schedule.dates=[];
+ if(!Array.isArray(schedule.players))schedule.players=[];
+ if(!Array.isArray(schedule.playDays))schedule.playDays=[...DEFAULT_PLAY_DAYS];
+ schedule.playDays=[...new Set(schedule.playDays.filter(day=>Number.isInteger(day)&&day>=0&&day<=6))];
+ if(!schedule.playDays.length)schedule.playDays=[...DEFAULT_PLAY_DAYS];
+ schedule.players.forEach(p=>{if(!p.availability)p.availability={};if(!p.playerID)p.playerID=createPlayerID();Object.keys(p.availability).forEach(date=>{if(p.availability[date]==="P")p.availability[date]="A"})});
+ if(typeof schedule.manager!=="string")schedule.manager="";
+ if(schedule.manager&&!schedule.players.some(player=>player.playerID===schedule.manager))schedule.manager="";
+ saveLocal();
+ return true;
+}
+function createPlayerID(){return globalThis.crypto?.randomUUID?crypto.randomUUID():`player-${Date.now()}-${Math.random().toString(36).slice(2,9)}`}
+function formatDate(date){const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,"0"),d=String(date.getDate()).padStart(2,"0");return `${y}-${m}-${d}`}
+function displayDate(date){return new Date(date+"T00:00:00").toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}
+function generateNextDates(count,days=schedule.playDays){
+ const result=[],current=new Date();
+ while(result.length<count){current.setDate(current.getDate()+1);if(days.includes(current.getDay()))result.push(formatDate(current))}
+ return result;
+}
+function createDefaultSchedule(){
+ schedule.dates=generateNextDates(21);
+ schedule.players=[{playerID:createPlayerID(),name:"Budnik",email:"",availability:{}},{playerID:createPlayerID(),name:"Ciaccio",email:"",availability:{}},{playerID:createPlayerID(),name:"Coyne",email:"",availability:{}}];
+ schedule.players.forEach(player=>schedule.dates.forEach(date=>player.availability[date]=""));
+}
+if(!loadLocal()){createDefaultSchedule();saveLocal()}
+function normalizeCloudSchedule(){
+ if(!schedule||typeof schedule!=="object")schedule={};
+ if(!Array.isArray(schedule.dates))schedule.dates=[];
+ if(!Array.isArray(schedule.players))schedule.players=[];
+ if(!Array.isArray(schedule.playDays))schedule.playDays=[...DEFAULT_PLAY_DAYS];
+ schedule.playDays=[...new Set(schedule.playDays.filter(day=>Number.isInteger(day)&&day>=0&&day<=6))];
+ if(!schedule.playDays.length)schedule.playDays=[...DEFAULT_PLAY_DAYS];
+ schedule.players.forEach(p=>{if(!p.availability)p.availability={};if(!p.playerID)p.playerID=createPlayerID();Object.keys(p.availability).forEach(date=>{if(p.availability[date]==="P")p.availability[date]="A"})});
+ if(typeof schedule.manager!=="string")schedule.manager="";
+ if(schedule.manager&&!schedule.players.some(player=>player.playerID===schedule.manager))schedule.manager="";
+}
+function renderPlayDayOptions(){
+ const container=document.getElementById("playDayOptions");
+ container.innerHTML=DAY_NAMES.map((name,day)=>`<label><input type="checkbox" value="${day}" ${schedule.playDays.includes(day)?"checked":""} onchange="updatePlayDays()"> ${name}</label>`).join("");
+}
+function isScheduleManager(){return Boolean(schedule.manager&&selectedPlayerID===schedule.manager)}
+function canEditRow(player){return isScheduleManager()||selectedPlayerID===player.playerID}
+function updateAccessUI(){
+ const selected=schedule.players.find(player=>player.playerID===selectedPlayerID);
+ document.getElementById("sessionLabel").textContent=selected?selected.name:"Choose your name in the table";
+ const owner=schedule.players.find(player=>player.playerID===schedule.manager);
+ document.getElementById("ownerLabel").textContent=owner?owner.name:"Not assigned";
+ const ownerSelect=document.getElementById("ownerSelect"),prior=ownerSelect.value;
+ ownerSelect.innerHTML=`<option value="">Choose a player</option>`+schedule.players.map(player=>`<option value="${escapeHtml(player.playerID)}">${escapeHtml(player.name)}</option>`).join("");
+ ownerSelect.value=schedule.players.some(player=>player.playerID===prior)?prior:(schedule.manager||selectedPlayerID||"");
+ const canAssign=!schedule.manager||isScheduleManager();
+ ownerSelect.disabled=!canAssign;
+ const assignButton=document.getElementById("assignOwnerButton");
+ assignButton.disabled=!canAssign||!selectedPlayerID||!schedule.players.length;
+ assignButton.textContent=schedule.manager?"Change Owner":"Assign Owner";
+ ["openCsvButton","addPlayerButton","rollForwardButton"].forEach(id=>document.getElementById(id).disabled=!isScheduleManager());
+ document.querySelectorAll("#playDayOptions input").forEach(input=>input.disabled=!isScheduleManager());
+}
+function escapeHtml(value){return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]))}
+function updatePlayDays(){
+ if(!isScheduleManager()){alert("Only the Scheduler Owner can change play days.");renderPlayDayOptions();updateAccessUI();return}
+ const selected=[...document.querySelectorAll("#playDayOptions input:checked")].map(input=>Number(input.value));
+ if(!selected.length){alert("Select at least one play day.");renderPlayDayOptions();return}
+ schedule.playDays=selected.sort((a,b)=>a-b);
+ schedule.dates=generateNextDates(21,schedule.playDays);
+ schedule.players.forEach(player=>schedule.dates.forEach(date=>{if(!(date in player.availability))player.availability[date]=""}));
+ saveLocal();render();
+}
+function setSchedulerOwner(){
+ if(schedule.manager&&!isScheduleManager()){alert("Only the current Scheduler Owner can change the owner.");return}
+ if(!selectedPlayerID){alert("Click a player name first.");return}
+ const ownerID=document.getElementById("ownerSelect").value;
+ if(!schedule.players.some(player=>player.playerID===ownerID)){alert("Choose a player as Scheduler Owner.");return}
+ schedule.manager=ownerID;saveLocal();render();
+}
+function countAvailable(date){return schedule.players.filter(p=>p.availability[date]==="A").length}
+function countSubs(date){return schedule.players.filter(p=>p.availability[date]==="S").length}
+function countBooked(date){return schedule.players.filter(p=>p.availability[date]==="B").length}
+function cycleStatus(playerIndex,date){
+ const player=schedule.players[playerIndex];
+ if(!player||!canEditRow(player)){alert("Select your name before changing your row. The Scheduler Owner can update every row.");return}
+ const current=player.availability[date]||"";
+ const next=STATES[(STATES.indexOf(current)+1)%STATES.length];
+ if(current==="B"&&!isScheduleManager()){alert("Only the Scheduler Owner can change a booked player.");return}
+ if(current==="/"&&!isScheduleManager()){
+  player.availability[date]="";saveLocal();render();return;
+ }
+ if(current==="/"&&isScheduleManager()){
+  player.availability[date]="B";saveLocal();render();return;
+ }
+ player.availability[date]=next;saveLocal();render();
+}
+function selectPlayer(playerID){selectedPlayerID=playerID;localStorage.setItem("tennisSelectedPlayer",playerID);render()}
+function render(){
+ updateAccessUI();
+ let html="<table><thead><tr><th class=\"player-col\">Player</th>";
+ schedule.dates.forEach(date=>html+=`<th>${displayDate(date)}</th>`);
+ html+="</tr></thead><tbody>";
+ schedule.players.forEach((player,index)=>{
+  html+=`<tr class="${selectedPlayerID===player.playerID?"selected-row":""}">`;
+  html+=`<td class="player-col"><button class="player-name ${selectedPlayerID===player.playerID?"selected":""}" data-select-player="${escapeHtml(player.playerID)}">${escapeHtml(player.name)}</button>${isScheduleManager()?`<button class="delete-btn" onclick="deletePlayer(${index})" aria-label="Delete ${escapeHtml(player.name)}">X</button>`:""}</td>`;
+  schedule.dates.forEach(date=>{
+   const val=player.availability[date]||"";
+   const cls=val==="A"?"available":val==="S"?"sub":val==="/"?"out":val==="B"?"booked":"blank";
+   const editable=canEditRow(player)&&(val!=="B"||isScheduleManager());
+   html+=`<td class="status ${cls}" title="${val==="B"?"Booked - B":val}" ${editable?`onclick="cycleStatus(${index},'${date}')"`:"aria-disabled=\"true\""}>${val}</td>`;
+  });
+  html+="</tr>";
+ });
+ html+=buildTotals()+"</tbody></table>";
+ document.getElementById("scheduleContainer").innerHTML=html;
+ document.querySelectorAll("[data-select-player]").forEach(button=>button.addEventListener("click",()=>selectPlayer(button.dataset.selectPlayer)));
+}
+function setSyncState(text,isError=false){const el=document.getElementById("syncState");el.textContent=text;el.style.color=isError?"#b91c1c":"#166534"}
+async function initializeCloudSync(){
+ try{
+  setSyncState("Loading shared schedule…");
+  let {data,error}=await supabaseClient.from("schedule_state").select("data").eq("id","main").maybeSingle();
+  if(error)throw error;
+  if(!data){
+   const seed=scheduleForCloud();
+   const insert=await supabaseClient.from("schedule_state").upsert({id:"main",data:seed,source_id:SYNC_CLIENT_ID},{onConflict:"id",ignoreDuplicates:true});
+   if(insert.error)throw insert.error;
+   const loaded=await supabaseClient.from("schedule_state").select("data").eq("id","main").single();
+   if(loaded.error)throw loaded.error;
+   data=loaded.data;
+  }
+  schedule=data.data;normalizeCloudSchedule();localStorage.setItem(STORAGE_KEY,JSON.stringify(schedule));cloudReady=true;renderPlayDayOptions();render();setSyncState("Synced");
+  supabaseClient.channel("schedule-state-sync").on("postgres_changes",{event:"*",schema:"public",table:"schedule_state",filter:"id=eq.main"},payload=>{
+   if(payload.new?.source_id===SYNC_CLIENT_ID||!payload.new?.data)return;
+   schedule=payload.new.data;normalizeCloudSchedule();localStorage.setItem(STORAGE_KEY,JSON.stringify(schedule));renderPlayDayOptions();render();setSyncState("Updated from another device");
+  }).subscribe(status=>{if(status==="CHANNEL_ERROR"||status==="TIMED_OUT")setSyncState("Live updates unavailable; saves still sync",true)});
+ }catch(error){setSyncState("Sync setup needed: "+(error.message||"check Supabase setup"),true)}
+}
+async function saveCloudSchedule(){
+ if(!cloudReady)return;
+ try{
+  const snapshot=scheduleForCloud();setSyncState("Saving…");
+  const {error}=await supabaseClient.from("schedule_state").update({data:snapshot,source_id:SYNC_CLIENT_ID,updated_at:new Date().toISOString()}).eq("id","main");
+  if(error)throw error;
+  setSyncState("Synced");
+ }catch(error){setSyncState("Could not sync: "+(error.message||"network error"),true)}
+}
+function scheduleForCloud(){const data=JSON.parse(JSON.stringify(schedule));data.players.forEach(player=>delete player.email);return data}
+function buildTotals(){return totalRow("Available",countAvailable)+totalRow("Subs",countSubs)+totalRow("Booked",countBooked)}
+function totalRow(label,calc){let row=`<tr class="footer-row"><td class="player-col">${label}</td>`;schedule.dates.forEach(date=>row+=`<td>${calc(date)}</td>`);return row+"</tr>"}
+function addPlayer(){if(!isScheduleManager()){alert("Only the Scheduler Owner can add players.");return}const name=prompt("Player name");if(!name)return;const player={playerID:createPlayerID(),name:name,email:"",availability:{}};schedule.dates.forEach(date=>player.availability[date]="");schedule.players.push(player);saveLocal();render()}
+function parseCsv(text){
+ const rows=[];let row=[],field="",quoted=false;
+ for(let i=0;i<text.length;i++){
+  const ch=text[i];
+  if(quoted&&ch==='"'&&text[i+1]==='"'){field+='"';i++}
+  else if(ch==='"')quoted=!quoted;
+  else if(ch===","&&!quoted){row.push(field);field=""}
+  else if((ch==="\n"||ch==="\r")&&!quoted){if(ch==="\r"&&text[i+1]==="\n")i++;row.push(field);rows.push(row);row=[];field=""}
+  else field+=ch;
+ }
+ if(field.length||row.length){row.push(field);rows.push(row)}
+ return rows;
+}
+function deletePlayer(i){if(!isScheduleManager()){alert("Only the Scheduler Owner can remove players.");return}if(schedule.players[i]?.playerID===schedule.manager){alert("Assign a different Scheduler Owner before removing this player.");return}if(!confirm("Delete player?"))return;schedule.players.splice(i,1);saveLocal();render()}
+function rollForwardWeek(){
+ if(!isScheduleManager()){alert("Select your Scheduler Owner name before rolling the schedule forward.");return}
+ const today=new Date();today.setHours(0,0,0,0);
+ const todayKey=formatDate(today),weekEnd=new Date(today);weekEnd.setDate(weekEnd.getDate()+((8-today.getDay())%7||7));
+ const weekEndKey=formatDate(weekEnd),orderedDates=[...schedule.dates].sort();
+ const rolling=orderedDates.filter(date=>date>=todayKey&&date<weekEndKey);
+ if(!rolling.length){alert("There are no remaining scheduled play days in the current week to roll forward.");return}
+ const removed=orderedDates.filter(date=>date<weekEndKey);
+ schedule.dates=orderedDates.filter(date=>date>=weekEndKey);
+ const sessionsPerWeek=rolling.length;
+ const lastDate=schedule.dates.length?schedule.dates[schedule.dates.length-1]:todayKey;
+ let current=new Date((lastDate>todayKey?lastDate:todayKey)+"T00:00:00"),added=[];
+ while(added.length<sessionsPerWeek){current.setDate(current.getDate()+1);if(schedule.playDays.includes(current.getDay()))added.push(formatDate(current))}
+ schedule.dates=schedule.dates.concat(added).sort();
+ added.forEach(date=>schedule.players.forEach(player=>player.availability[date]=""));
+ removed.forEach(date=>schedule.players.forEach(player=>delete player.availability[date]));
+ saveLocal();render();
+}
+function openCsv(){document.getElementById("csvFile").click()}
+document.getElementById("csvFile").addEventListener("change",e=>{
+ if(!isScheduleManager()){alert("Only the Scheduler Owner can replace the schedule.");e.target.value="";return}
+ const file=e.target.files[0];if(!file)return;
+ const reader=new FileReader();reader.onload=evt=>{
+  const lines=evt.target.result.trim().split(/\r?\n/),headers=lines[0].split(",");
+  const oldPlayers=schedule.players; schedule.dates=headers.slice(1);schedule.players=[];
+  for(let i=1;i<lines.length;i++){const cols=lines[i].split(","),name=cols[0],old=oldPlayers.find(player=>player.name===name),player={playerID:old?.playerID||createPlayerID(),name,email:old?.email||"",availability:{}};schedule.dates.forEach((d,x)=>{const value=cols[x+1]||"";player.availability[d]=value==="P"?"A":value});schedule.players.push(player)}
+  if(!schedule.players.some(player=>player.playerID===schedule.manager))schedule.manager="";
+  saveLocal();render();
+ };reader.readAsText(file);
+});
+function exportCSV(){
+ const rows=[["Player",...schedule.dates]];
+ schedule.players.forEach(player=>{const row=[player.name];schedule.dates.forEach(date=>row.push(player.availability[date]||""));rows.push(row)});
+ const csv=rows.map(row=>row.join(",")).join("\n"),blob=new Blob([csv],{type:"text/csv"}),a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);a.download="tennisSchedule.csv";a.click();URL.revokeObjectURL(a.href);
+}
+renderPlayDayOptions();render();initializeCloudSync();
+</script>
+</body>
+</html>
