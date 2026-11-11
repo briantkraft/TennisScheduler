@@ -134,6 +134,8 @@ function updatePlayDays(){
  const selected=[...document.querySelectorAll("#playDayOptions input:checked")].map(input=>Number(input.value));
  if(!selected.length){alert("Select at least one play day.");renderPlayDayOptions();return}
  schedule.playDays=selected.sort((a,b)=>a-b);
+ schedule.dates=generateNextDates(21,schedule.playDays);
+ schedule.players.forEach(player=>schedule.dates.forEach(date=>{if(!(date in player.availability))player.availability[date]=""}));
  saveLocal();render();
 }
 function setSchedulerOwner(){
