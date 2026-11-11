@@ -238,8 +238,13 @@ function rollForwardWeek(){
  const weekEndKey=formatDate(weekEnd),orderedDates=[...schedule.dates].sort();
  const rolling=orderedDates.filter(date=>date>=todayKey&&date<weekEndKey);
  if(!rolling.length){alert("There are no remaining scheduled play days in the current week to roll forward.");return}
- const removed=orderedDates.filter(date=>date<weekEndKey);
- schedule.dates=orderedDates.filter(date=>date>=weekEndKey);
+ const keepFrom = new Date(today);
+  keepFrom.setDate(today.getDate() - 3);
+  const keepFromKey = formatDate(keepFrom);
+  const removed = orderedDates.filter(date =>
+    date < keepFromKey || (date >= todayKey && date < weekEndKey)
+  );
+  schedule.dates = orderedDates.filter(date => !removed.includes(date)); 
  const sessionsPerWeek=rolling.length;
  const lastDate=schedule.dates.length?schedule.dates[schedule.dates.length-1]:todayKey;
  let current=new Date((lastDate>todayKey?lastDate:todayKey)+"T00:00:00"),added=[];
