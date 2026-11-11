@@ -85,7 +85,7 @@ function createPlayerID(){return globalThis.crypto?.randomUUID?crypto.randomUUID
 function formatDate(date){const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,"0"),d=String(date.getDate()).padStart(2,"0");return `${y}-${m}-${d}`}
 function displayDate(date){return new Date(date+"T00:00:00").toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}
 function generateNextDates(count,days=schedule.playDays){
- const result=[],current=new Date();
+ const result=[],current=new Date(-2);
  while(result.length<count){current.setDate(current.getDate()+1);if(days.includes(current.getDay()))result.push(formatDate(current))}
  return result;
 }
