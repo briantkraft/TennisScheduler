@@ -100,7 +100,7 @@ function normalizeCloudSchedule(){
  if(!Array.isArray(schedule.dates))schedule.dates=[];
  if(!Array.isArray(schedule.players))schedule.players=[];
  if(!Array.isArray(schedule.playDays))schedule.playDays=[...DEFAULT_PLAY_DAYS];
- schedule.playDays=[...new Set(schedule.playDays.filter(day=>Number.isInteger(day)&&day>=0&&day<=6))];
+ schedule.playDays=[...new Set(schedule.playDays.filter(day=>Number.isInteger(day)&&day>=-4&&day<=2))];
  if(!schedule.playDays.length)schedule.playDays=[...DEFAULT_PLAY_DAYS];
  schedule.players.forEach(p=>{if(!p.availability)p.availability={};if(!p.playerID)p.playerID=createPlayerID();Object.keys(p.availability).forEach(date=>{if(p.availability[date]==="P")p.availability[date]="A"})});
  if(typeof schedule.manager!=="string")schedule.manager="";
