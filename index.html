@@ -234,10 +234,17 @@ function deletePlayer(i){if(!isScheduleManager()){alert("Only the Scheduler Owne
 function rollForwardWeek(){
  if(!isScheduleManager()){alert("Select your Scheduler Owner name before rolling the schedule forward.");return}
  const today=new Date();today.setHours(0,0,0,0);
- const todayKey=formatDate(today),weekEnd=new Date(today);weekEnd.setDate(weekEnd.getDate()+((8-today.getDay())%7||7));
+ const todayKey=formatDate(today),keepFrom=new Date(today),weekEnd=new Date(today);
+ keepFrom.setDate(today.getDate()-5);
+ weekEnd.setDate(weekEnd.getDate()+((8-today.getDay())%7||7));
+ const keepFromKey=formatDate(keepFrom);
  const weekEndKey=formatDate(weekEnd),orderedDates=[...schedule.dates].sort();
- const rolling=orderedDates.filter(date=>date>=todayKey&&date<weekEndKey);
+ const rolling=orderedDates.filter(date=>date>=todayKey&&date<weekEndKey);  
+ const removed=orderedDates.filter(date=>date<weekEndKey);
+ schedule.dates=orderedDates.filter(date=>date>=weekEndKey);
  if(!rolling.length){alert("There are no remaining scheduled play days in the current week to roll forward.");return}
+ const removed=orderedDates.filter(date=>date<keepFromKey||(date>=todayKey&&date<weekEndKey));
+ schedule.dates=orderedDates.filter(date=>!removed.includes(date));
  const keepFrom = new Date(today);
   keepFrom.setDate(today.getDate() - 3);
   const keepFromKey = formatDate(keepFrom);
