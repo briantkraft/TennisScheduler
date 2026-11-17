@@ -89,10 +89,18 @@ function generateNextDates(count,days=schedule.playDays){
  while(result.length<count){current.setDate(current.getDate()+1);if(days.includes(current.getDay()))result.push(formatDate(current))}
  return result;
 }
+function generateDatesWithinNextDays(dayCount,days=schedule.playDays){
+ const result=[],current=new Date();current.setHours(0,0,0,0);
+ for(let offset=0;offset<dayCount;offset++){
+  current.setDate(current.getDate()+1);
+  if(days.includes(current.getDay()))result.push(formatDate(current));
+ }
+ return result;
+}
 function createDefaultSchedule(){
- /* schedule.dates=generateNextDates(21);
+ schedule.dates=generateNextDates(21);
  schedule.players=[{playerID:createPlayerID(),name:"Budnik",email:"",availability:{}},{playerID:createPlayerID(),name:"Ciaccio",email:"",availability:{}},{playerID:createPlayerID(),name:"Coyne",email:"",availability:{}}];
- schedule.players.forEach(player=>schedule.dates.forEach(date=>player.availability[date]="")); */
+ schedule.players.forEach(player=>schedule.dates.forEach(date=>player.availability[date]=""));
 }
 if(!loadLocal()){createDefaultSchedule();saveLocal()}
 function normalizeCloudSchedule(){
@@ -134,8 +142,12 @@ function updatePlayDays(){
  const selected=[...document.querySelectorAll("#playDayOptions input:checked")].map(input=>Number(input.value));
  if(!selected.length){alert("Select at least one play day.");renderPlayDayOptions();return}
  schedule.playDays=selected.sort((a,b)=>a-b);
- /* schedule.dates=generateNextDates(21,schedule.playDays);
- schedule.players.forEach(player=>schedule.dates.forEach(date=>{if(!(date in player.availability))player.availability[date]=""})); */
+ const today=new Date();today.setHours(0,0,0,0);
+ const todayKey=formatDate(today),keepFrom=new Date(today);keepFrom.setDate(keepFrom.getDate()-5);
+ const keepFromKey=formatDate(keepFrom);
+ const recentPast=schedule.dates.filter(date=>date>=keepFromKey&&date<todayKey);
+ const nextDates=generateDatesWithinNextDays(21,schedule.playDays);
+ schedule.dates=[...new Set(recentPast.concat(nextDates))].sort();
  saveLocal();render();
 }
 function setSchedulerOwner(){
