@@ -89,14 +89,6 @@ function generateNextDates(count,days=schedule.playDays){
  while(result.length<count){current.setDate(current.getDate()+1);if(days.includes(current.getDay()))result.push(formatDate(current))}
  return result;
 }
-function generateDatesWithinNextDays(dayCount,days=schedule.playDays){
- const result=[],current=new Date();current.setHours(0,0,0,0);
- for(let offset=0;offset<dayCount;offset++){
-  current.setDate(current.getDate()+1);
-  if(days.includes(current.getDay()))result.push(formatDate(current));
- }
- return result;
-}
 function createDefaultSchedule(){
  schedule.dates=generateNextDates(21);
  schedule.players=[{playerID:createPlayerID(),name:"Budnik",email:"",availability:{}},{playerID:createPlayerID(),name:"Ciaccio",email:"",availability:{}},{playerID:createPlayerID(),name:"Coyne",email:"",availability:{}}];
@@ -146,7 +138,7 @@ function updatePlayDays(){
  const todayKey=formatDate(today),keepFrom=new Date(today);keepFrom.setDate(keepFrom.getDate()-5);
  const keepFromKey=formatDate(keepFrom);
  const recentPast=schedule.dates.filter(date=>date>=keepFromKey&&date<todayKey);
- const nextDates=generateDatesWithinNextDays(21,schedule.playDays);
+ const nextDates=generateNextDates(21,schedule.playDays);
  schedule.dates=[...new Set(recentPast.concat(nextDates))].sort();
  saveLocal();render();
 }
