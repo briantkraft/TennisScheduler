@@ -90,9 +90,9 @@ function generateNextDates(count,days=schedule.playDays){
  return result;
 }
 function createDefaultSchedule(){
- schedule.dates=generateNextDates(21);
+ /* schedule.dates=generateNextDates(21);
  schedule.players=[{playerID:createPlayerID(),name:"Budnik",email:"",availability:{}},{playerID:createPlayerID(),name:"Ciaccio",email:"",availability:{}},{playerID:createPlayerID(),name:"Coyne",email:"",availability:{}}];
- schedule.players.forEach(player=>schedule.dates.forEach(date=>player.availability[date]=""));
+ schedule.players.forEach(player=>schedule.dates.forEach(date=>player.availability[date]="")); */
 }
 if(!loadLocal()){createDefaultSchedule();saveLocal()}
 function normalizeCloudSchedule(){
