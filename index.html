@@ -41,8 +41,8 @@ thead .player-col{background:var(--dark)}
 <button id="rollForwardButton" onclick="rollForwardWeek()">Roll Current Week Forward</button>
 <button onclick="window.print()">Print</button>
 </div>
-<div class="card" style="margin-bottom:12px">Click on your name to edit that row.  </div>
-<p class="legend">Click your name in the Player column to select your row, then click a date to change your status. </p>
+<div class="card" style="margin-bottom:12px">Click a player name before editing that row. The Scheduler Owner can click their own name to manage the schedule and mark Booked. Names help avoid mistakes, not verify identity.</div>
+<p class="legend">Click your name in the Player column to select your row, then click a date to change your status. Your selection is remembered on this browser.</p>
 <div class="summary">
 <div class="card"><b>Selected player</b><br><span id="sessionLabel" class="session-label">Choose your name in the table</span></div>
 <div class="card"><b>Scheduler Owner</b><br><span id="ownerLabel">Not assigned</span><br><select id="ownerSelect" aria-label="Choose Scheduler Owner"></select><button id="assignOwnerButton" onclick="setSchedulerOwner()">Assign Owner</button></div>
@@ -73,7 +73,7 @@ function loadLocal(){
  if(!Array.isArray(schedule.dates))schedule.dates=[];
  if(!Array.isArray(schedule.players))schedule.players=[];
  if(!Array.isArray(schedule.playDays))schedule.playDays=[...DEFAULT_PLAY_DAYS];
- schedule.playDays=[...new Set(schedule.playDays.filter(day=>Number.isInteger(day)&&day>=1&&day<=6))];
+ schedule.playDays=[...new Set(schedule.playDays.filter(day=>Number.isInteger(day)&&day>=0&&day<=6))];
  if(!schedule.playDays.length)schedule.playDays=[...DEFAULT_PLAY_DAYS];
  schedule.players.forEach(p=>{if(!p.availability)p.availability={};if(!p.playerID)p.playerID=createPlayerID();Object.keys(p.availability).forEach(date=>{if(p.availability[date]==="P")p.availability[date]="A"})});
  if(typeof schedule.manager!=="string")schedule.manager="";
@@ -85,13 +85,13 @@ function createPlayerID(){return globalThis.crypto?.randomUUID?crypto.randomUUID
 function formatDate(date){const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,"0"),d=String(date.getDate()).padStart(2,"0");return `${y}-${m}-${d}`}
 function displayDate(date){return new Date(date+"T00:00:00").toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}
 function generateNextDates(count,days=schedule.playDays){
- const result=[],current=new Date(); current.setDate(current.getDate() - 7);
+ const result=[],current=new Date();
  while(result.length<count){current.setDate(current.getDate()+1);if(days.includes(current.getDay()))result.push(formatDate(current))}
  return result;
 }
 function createDefaultSchedule(){
  schedule.dates=generateNextDates(21);
- schedule.players=[{playerID:createPlayerID(),name:"Brian Kraft",email:"",availability:{}}];
+ schedule.players=[{playerID:createPlayerID(),name:"Budnik",email:"",availability:{}},{playerID:createPlayerID(),name:"Ciaccio",email:"",availability:{}},{playerID:createPlayerID(),name:"Coyne",email:"",availability:{}}];
  schedule.players.forEach(player=>schedule.dates.forEach(date=>player.availability[date]=""));
 }
 if(!loadLocal()){createDefaultSchedule();saveLocal()}
@@ -100,7 +100,7 @@ function normalizeCloudSchedule(){
  if(!Array.isArray(schedule.dates))schedule.dates=[];
  if(!Array.isArray(schedule.players))schedule.players=[];
  if(!Array.isArray(schedule.playDays))schedule.playDays=[...DEFAULT_PLAY_DAYS];
- schedule.playDays=[...new Set(schedule.playDays.filter(day=>Number.isInteger(day)&&day>=1&&day<=6))];
+ schedule.playDays=[...new Set(schedule.playDays.filter(day=>Number.isInteger(day)&&day>=0&&day<=6))];
  if(!schedule.playDays.length)schedule.playDays=[...DEFAULT_PLAY_DAYS];
  schedule.players.forEach(p=>{if(!p.availability)p.availability={};if(!p.playerID)p.playerID=createPlayerID();Object.keys(p.availability).forEach(date=>{if(p.availability[date]==="P")p.availability[date]="A"})});
  if(typeof schedule.manager!=="string")schedule.manager="";
@@ -239,19 +239,10 @@ function rollForwardWeek(){
  weekEnd.setDate(weekEnd.getDate()+((8-today.getDay())%7||7));
  const keepFromKey=formatDate(keepFrom);
  const weekEndKey=formatDate(weekEnd),orderedDates=[...schedule.dates].sort();
- const rolling=orderedDates.filter(date=>date>=todayKey&&date<weekEndKey);  
- const removed=orderedDates.filter(date=>date<weekEndKey);
- schedule.dates=orderedDates.filter(date=>date>=weekEndKey);
+ const rolling=orderedDates.filter(date=>date>=todayKey&&date<weekEndKey);
  if(!rolling.length){alert("There are no remaining scheduled play days in the current week to roll forward.");return}
  const removed=orderedDates.filter(date=>date<keepFromKey||(date>=todayKey&&date<weekEndKey));
  schedule.dates=orderedDates.filter(date=>!removed.includes(date));
- const keepFrom = new Date(today);
-  keepFrom.setDate(today.getDate() - 3);
-  const keepFromKey = formatDate(keepFrom);
-  const removed = orderedDates.filter(date =>
-    date < keepFromKey || (date >= todayKey && date < weekEndKey)
-  );
-  schedule.dates = orderedDates.filter(date => !removed.includes(date)); 
  const sessionsPerWeek=rolling.length;
  const lastDate=schedule.dates.length?schedule.dates[schedule.dates.length-1]:todayKey;
  let current=new Date((lastDate>todayKey?lastDate:todayKey)+"T00:00:00"),added=[];
