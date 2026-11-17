@@ -86,7 +86,7 @@ function formatDate(date){const y=date.getFullYear(),m=String(date.getMonth()+1)
 function displayDate(date){return new Date(date+"T00:00:00").toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}
 function generateNextDates(count,days=schedule.playDays){
  const result=[],current=new Date();
- while(result.length<count){current.setDate(current.getDate()+1);if(days.includes(current.getDay()))result.push(formatDate(current))}
+ while(result.length<count){current.setDate(current.getDate()+6);if(days.includes(current.getDay()))result.push(formatDate(current))}
  return result;
 }
 function createDefaultSchedule(){
