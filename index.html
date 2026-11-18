@@ -29,6 +29,29 @@ thead .player-col{background:var(--dark)}
 .link-btn{background:#7c3aed;padding:3px 7px;font-size:11px;margin-top:4px}
 .legend{margin:0 0 12px;color:#374151;font-size:14px}
 .player-name{font:inherit;font-weight:bold;color:#1d4ed8;background:transparent;padding:0;text-align:left}.player-name.selected{color:#166534;text-decoration:underline}.selected-row{outline:2px solid #22c55e;outline-offset:-2px}
+.schedule-container{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;max-width:100%}
+@media (max-width:640px){
+ body{padding:10px;font-size:15px}
+ h1{font-size:23px;margin-bottom:12px}
+ .toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .toolbar button{min-height:46px;padding:9px 8px;font-size:14px}
+ #rollForwardButton{grid-column:1/-1}
+ .summary{display:grid;grid-template-columns:1fr;gap:8px}
+ .summary .card{min-width:0;width:100%}
+ .card select{width:100%;min-width:0;min-height:42px}
+ #assignOwnerButton{min-height:44px;margin-top:6px}
+ .play-day-options{gap:6px 12px}
+ .play-day-options label{min-height:40px;display:inline-flex;align-items:center;gap:4px}
+ .play-day-options input{width:20px;height:20px}
+ .schedule-container{max-height:72vh}
+ table{min-width:max-content;width:max-content}
+ th,td{padding:6px 4px}
+ .player-col{min-width:125px;width:125px;max-width:125px}
+ .status{width:48px;min-width:48px;height:46px;padding:4px 2px;font-size:16px}
+ .player-name{min-height:44px;max-width:100%;overflow-wrap:anywhere}
+ .delete-btn{min-width:36px;min-height:36px}
+ .legend{font-size:13px;line-height:1.4}
+}
 </style>
 </head>
 <body>
