@@ -65,12 +65,12 @@ thead .player-col{background:var(--dark)}
 <button id="rollForwardButton" onclick="rollForwardWeek()">Roll Current Week Forward</button>
 <button id="printButton" onclick="window.print()">Print</button>
 </div>
+<div class="card" style="margin-bottom:12px">Click a player name before editing that row. The Scheduler Owner can click their own name to manage the schedule and mark Booked. Names help avoid mistakes, not verify identity.</div>
 <p class="legend">Click your name in the Player column to select your row, then click a date to change your status. Your selection is remembered on this browser.</p>
 <div class="summary">
-<div class="card"><b>Selected player</b><br><span id="sessionLabel" class="session-label">Choose your name in the table</span></div>
-<div class="card"><b>Scheduler Owner</b><br><span id="ownerLabel">Not assigned</span><br><select id="ownerSelect" aria-label="Choose Scheduler Owner"></select><button id="assignOwnerButton" onclick="setSchedulerOwner()">Assign Owner</button></div>
+<div class="card" id="ownerCard"><b>Scheduler Owner</b><br><span id="ownerLabel">Not assigned</span><br><select id="ownerSelect" aria-label="Choose Scheduler Owner"></select><button id="assignOwnerButton" onclick="setSchedulerOwner()">Assign Owner</button></div>
 <div class="card" id="playDaysCard"><b>Play Days</b><div class="play-day-options" id="playDayOptions"></div></div>
-<div class="card"><b>Sync</b><br><span id="syncState">Connecting to shared schedule…</span></div>
+<div class="card" id="syncCard"><b>Sync</b><br><span id="syncState">Connecting to shared schedule…</span></div>
 </div>
 <p class="legend">Status cycle: blank → A (Available) → S (Sub) → / (Out) → blank. The Scheduler Owner can cycle / to B (Booked) and B back to blank.</p>
 <div class="schedule-container" id="scheduleContainer"></div>
@@ -86,6 +86,7 @@ const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHA
 const SYNC_CLIENT_ID=createPlayerID();
 let schedule={dates:[],players:[],playDays:[...DEFAULT_PLAY_DAYS],manager:""};
 let selectedPlayerID=localStorage.getItem("tennisSelectedPlayer")||"";
+let ownerPinGranted=false;
 let cloudReady=false,cloudSaveTimer=null;
 
 function saveLocal(){localStorage.setItem(STORAGE_KEY,JSON.stringify(schedule));if(cloudReady){clearTimeout(cloudSaveTimer);cloudSaveTimer=setTimeout(saveCloudSchedule,250)}}
@@ -133,13 +134,14 @@ function renderPlayDayOptions(){
  const container=document.getElementById("playDayOptions");
  container.innerHTML=DAY_NAMES.map((name,day)=>`<label><input type="checkbox" value="${day}" ${schedule.playDays.includes(day)?"checked":""} onchange="updatePlayDays()"> ${name}</label>`).join("");
 }
-function isScheduleManager(){return Boolean(schedule.manager&&selectedPlayerID===schedule.manager)}
+function isScheduleManager(){return Boolean(ownerPinGranted&&schedule.manager&&selectedPlayerID===schedule.manager)}
 function canEditRow(player){return isScheduleManager()||selectedPlayerID===player.playerID}
 function updateAccessUI(){
- const selected=schedule.players.find(player=>player.playerID===selectedPlayerID);
- document.getElementById("sessionLabel").textContent=selected?selected.name:"Choose your name in the table";
  const owner=schedule.players.find(player=>player.playerID===schedule.manager);
  document.getElementById("ownerLabel").textContent=owner?owner.name:"Not assigned";
+ const ownerMode=isScheduleManager();
+ document.getElementById("ownerCard").hidden=Boolean(schedule.manager)&&!ownerMode;
+ document.getElementById("syncCard").hidden=!ownerMode;
  const ownerSelect=document.getElementById("ownerSelect"),prior=ownerSelect.value;
  ownerSelect.innerHTML=`<option value="">Choose a player</option>`+schedule.players.map(player=>`<option value="${escapeHtml(player.playerID)}">${escapeHtml(player.name)}</option>`).join("");
  ownerSelect.value=schedule.players.some(player=>player.playerID===prior)?prior:(schedule.manager||selectedPlayerID||"");
@@ -148,7 +150,6 @@ function updateAccessUI(){
  const assignButton=document.getElementById("assignOwnerButton");
  assignButton.disabled=!canAssign||!selectedPlayerID||!schedule.players.length;
  assignButton.textContent=schedule.manager?"Change Owner":"Assign Owner";
- const ownerMode=isScheduleManager();
  ["openCsvButton","saveCsvButton","addPlayerButton","rollForwardButton","printButton","playDaysCard"].forEach(id=>{
   const control=document.getElementById(id);control.hidden=!ownerMode;
   if("disabled" in control)control.disabled=!ownerMode;
@@ -174,7 +175,7 @@ function setSchedulerOwner(){
  if(!selectedPlayerID){alert("Click a player name first.");return}
  const ownerID=document.getElementById("ownerSelect").value;
  if(!schedule.players.some(player=>player.playerID===ownerID)){alert("Choose a player as Scheduler Owner.");return}
- schedule.manager=ownerID;saveLocal();render();
+ schedule.manager=ownerID;ownerPinGranted=false;saveLocal();render();
 }
 function countAvailable(date){return schedule.players.filter(p=>p.availability[date]==="A").length}
 function countSubs(date){return schedule.players.filter(p=>p.availability[date]==="S").length}
@@ -193,7 +194,19 @@ function cycleStatus(playerIndex,date){
  }
  player.availability[date]=next;saveLocal();render();
 }
-function selectPlayer(playerID){selectedPlayerID=playerID;localStorage.setItem("tennisSelectedPlayer",playerID);render()}
+function selectPlayer(playerID){
+ const previous=selectedPlayerID;
+ if(playerID===schedule.manager){
+  ownerPinGranted=false;
+  if(prompt("Enter Scheduler Owner PIN")!=="1234"){
+   selectedPlayerID=previous===schedule.manager?"":previous;
+   if(selectedPlayerID)localStorage.setItem("tennisSelectedPlayer",selectedPlayerID);else localStorage.removeItem("tennisSelectedPlayer");
+   alert("Incorrect PIN.");render();return;
+  }
+  ownerPinGranted=true;
+ }else ownerPinGranted=false;
+ selectedPlayerID=playerID;localStorage.setItem("tennisSelectedPlayer",playerID);render();
+}
 function render(){
  updateAccessUI();
  let html="<table><thead><tr><th class=\"player-col\">Player</th>";
