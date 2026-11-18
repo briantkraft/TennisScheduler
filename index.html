@@ -29,6 +29,7 @@ thead .player-col{background:var(--dark)}
 .link-btn{background:#7c3aed;padding:3px 7px;font-size:11px;margin-top:4px}
 .legend{margin:0 0 12px;color:#374151;font-size:14px}
 .player-name{font:inherit;font-weight:bold;color:#1d4ed8;background:transparent;padding:0;text-align:left}.player-name.selected{color:#166534;text-decoration:underline}.selected-row{outline:2px solid #22c55e;outline-offset:-2px}
+.toolbar button[hidden],.card[hidden]{display:none!important}
 .schedule-container{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;max-width:100%}
 @media (max-width:640px){
  body{padding:10px;font-size:15px}
@@ -59,17 +60,17 @@ thead .player-col{background:var(--dark)}
 <div class="toolbar">
 <button id="openCsvButton" onclick="openCsv()">Open CSV</button>
 <input type="file" id="csvFile" accept=".csv">
-<button onclick="exportCSV()">Save CSV</button>
+<button id="saveCsvButton" onclick="exportCSV()">Save CSV</button>
 <button id="addPlayerButton" onclick="addPlayer()">Add Player</button>
 <button id="rollForwardButton" onclick="rollForwardWeek()">Roll Current Week Forward</button>
-<button onclick="window.print()">Print</button>
+<button id="printButton" onclick="window.print()">Print</button>
 </div>
 <div class="card" style="margin-bottom:12px">Click a player name before editing that row. The Scheduler Owner can click their own name to manage the schedule and mark Booked. Names help avoid mistakes, not verify identity.</div>
 <p class="legend">Click your name in the Player column to select your row, then click a date to change your status. Your selection is remembered on this browser.</p>
 <div class="summary">
 <div class="card"><b>Selected player</b><br><span id="sessionLabel" class="session-label">Choose your name in the table</span></div>
 <div class="card"><b>Scheduler Owner</b><br><span id="ownerLabel">Not assigned</span><br><select id="ownerSelect" aria-label="Choose Scheduler Owner"></select><button id="assignOwnerButton" onclick="setSchedulerOwner()">Assign Owner</button></div>
-<div class="card"><b>Play Days</b><div class="play-day-options" id="playDayOptions"></div></div>
+<div class="card" id="playDaysCard"><b>Play Days</b><div class="play-day-options" id="playDayOptions"></div></div>
 <div class="card"><b>Sync</b><br><span id="syncState">Connecting to shared schedule…</span></div>
 </div>
 <p class="legend">Status cycle: blank → A (Available) → S (Sub) → / (Out) → blank. The Scheduler Owner can cycle / to B (Booked) and B back to blank.</p>
@@ -148,8 +149,12 @@ function updateAccessUI(){
  const assignButton=document.getElementById("assignOwnerButton");
  assignButton.disabled=!canAssign||!selectedPlayerID||!schedule.players.length;
  assignButton.textContent=schedule.manager?"Change Owner":"Assign Owner";
- ["openCsvButton","addPlayerButton","rollForwardButton"].forEach(id=>document.getElementById(id).disabled=!isScheduleManager());
- document.querySelectorAll("#playDayOptions input").forEach(input=>input.disabled=!isScheduleManager());
+ const ownerMode=isScheduleManager();
+ ["openCsvButton","saveCsvButton","addPlayerButton","rollForwardButton","printButton","playDaysCard"].forEach(id=>{
+  const control=document.getElementById(id);control.hidden=!ownerMode;
+  if("disabled" in control)control.disabled=!ownerMode;
+ });
+ document.querySelectorAll("#playDayOptions input").forEach(input=>input.disabled=!ownerMode);
 }
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]))}
 function updatePlayDays(){
