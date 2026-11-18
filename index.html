@@ -65,14 +65,14 @@ thead .player-col{background:var(--dark)}
 <button onclick="window.print()">Print</button>
 </div>
 <div class="card" style="margin-bottom:12px">Click a player name before editing that row. The Scheduler Owner can click their own name to manage the schedule and mark Booked. Names help avoid mistakes, not verify identity.</div>
-<p class="legend">Click your name in the Player column to select your row, then click a date to change your status. Your selection is remembered on this browser.</p>
+<p class="legend">Click your name in the Player column to select your row, then click a date to change your status. </p>
 <div class="summary">
 <div class="card"><b>Selected player</b><br><span id="sessionLabel" class="session-label">Choose your name in the table</span></div>
 <div class="card"><b>Scheduler Owner</b><br><span id="ownerLabel">Not assigned</span><br><select id="ownerSelect" aria-label="Choose Scheduler Owner"></select><button id="assignOwnerButton" onclick="setSchedulerOwner()">Assign Owner</button></div>
 <div class="card"><b>Play Days</b><div class="play-day-options" id="playDayOptions"></div></div>
 <div class="card"><b>Sync</b><br><span id="syncState">Connecting to shared schedule…</span></div>
 </div>
-<p class="legend">Status cycle: blank → A (Available) → S (Sub) → / (Out) → blank. The Scheduler Owner can cycle / to B (Booked) and B back to blank.</p>
+<p class="legend">Status cycle: blank → A (Available) → S (Sub) → / (Out) → blank. Only the Owner can cycle to B (Booked).</p>
 <div class="schedule-container" id="scheduleContainer"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
